@@ -1,23 +1,136 @@
-# Adaptive website
-Welcome to this engaging Halloween-themed website that impresses with its responsiveness and creative design. This project is crafted using HTML, CSS, and JavaScript, boasting a range of interesting features.
+# Campaign Analytics Dashboard
 
-# Key features
+Статичний вебзастосунок, який імітує екран звітів affiliate-трекера в дусі Keitaro або Binom. Усі цифри згенеровані в браузері: бекенда немає, тож проєкт можна задеплоїти як звичайний статичний сайт.
 
-- **Scrolling Animations :** Enjoy seamless scrolling with captivating animations as you navigate through the content.</li>
+Інтерфейс англійською, бо так виглядають робочі кабінети трекерів. Назви офферів, GEO-виплати й домен postback URL вигадані.
 
-- **Three Color Designs :** The website offers three distinct color schemes—green, red, and black—allowing you to choose your preferred visual style.</li>
+## Скріншоти
 
-- **Smooth Section Transitions :** Experience smooth transitions between sections for a comfortable and enjoyable user experience.
+Місця для знімків екрана. Додайте файли й розкоментуйте рядки:
 
-- **Mobile-First Development :** Initially developed following the Mobile-First methodology, ensuring optimal performance on mobile devices.
+<!-- ![Огляд дашборда](docs/screenshots/dashboard.png) -->
+<!-- ![Тестер postback URL](docs/screenshots/postback.png) -->
 
-- **Desktop Compatibility :** Adapted for desktop use without compromising the user experience.
+- `docs/screenshots/dashboard.png` — KPI, графіки, таблиця кампаній і жива стрічка конверсій
+- `docs/screenshots/postback.png` — сторінка тестера postback URL
 
-- **Beautiful UI :** Compatible with all mobile devices, the website boasts a beautiful and pleasant user interface to enhance your browsing experience.
+## Стек
 
-# Getting Started
-To <a href="https://dimaa21.github.io/website-halloween/">explore</a> the website, simply navigate and immerse yourself in the Halloween spirit. 
+- React 18, TypeScript, Vite
+- Tailwind CSS
+- Recharts
+- TanStack Table
+- Zustand для фільтрів
+- Vitest і React Testing Library
+- ESLint і Prettier
 
-Feel free to contribute, report issues, or provide feedback. Happy Halloween! 🎃
+## Запуск
 
-![](preview.png)
+```bash
+npm install
+npm run dev
+```
+
+Інші команди:
+
+```bash
+npm test
+npm run lint
+npm run build
+npm run preview
+```
+
+`npm run build` збирає сайт з `base: '/'`, тож локальний preview відкривається з кореня. Збірка для GitHub Pages виставляє base `/campaign-analytics-dashboard/` через змінну `GITHUB_PAGES=true` у workflow.
+
+## Що на екрані
+
+- Шапка з назвою та індикатором Live. Індикатор стає Paused, коли потік зупинено.
+- Фільтри: сьогодні, 7 днів, 30 днів або власний діапазон, мультивибір GEO й офферів, джерело трафіку, вертикаль. Стан пишеться в query-параметри, тож посилання можна надіслати, а кнопка Back повертає попередній набір.
+- Вісім KPI з дельтою до попереднього вікна тієї ж довжини. Для Cost зростання позначене червоним: дорожчий трафік — це гірше.
+- Графіки: кліки, ліди й дохід у часі; прибуток по GEO; частка доходу по вертикалях.
+- Таблиця кампаній із сортуванням, пагінацією, рядком підсумків і кольором ROI. CR, EPC і ROI в підсумку рахуються із сум, а не як середнє відсоткових колонок.
+- Live conversions: нова подія кожні 2–5 секунд, кнопки Pause і Resume. Схвалена конверсія збільшує ліди й дохід у KPI та таблиці.
+- Окрема сторінка тестера postback URL: шаблон із макросами, тестові значення, превʼю і Copy.
+- Темна й світла тема, зберігається в `localStorage`.
+
+## Формули
+
+Нехай `leads` — кількість лідів, `clicks` — кліки, `revenue` — дохід, `cost` — витрата.
+
+- CR = leads / clicks
+- EPC = revenue / clicks
+- Profit = revenue − cost
+- ROI = (revenue − cost) / cost
+
+Якщо кліків нуль, CR і EPC дорівнюють 0. Якщо витрата нуль, ROI дорівнює 0, щоб на екрані не зʼявлялось ділення на нуль.
+
+Дельта на картці — відносна зміна проти попереднього періоду:
+
+`(поточне − попереднє) / |попереднє|`
+
+Якщо попереднє значення 0, а поточне теж 0, дельта 0. Якщо попереднє 0, а поточне ні, дельта показується як +100%.
+
+## Як влаштовані дані
+
+`src/data/generator.ts` будує каталог офферів, GEO, джерел і кампаній, а потім денну статистику на 62 дні. Генератор випадкових чисел — Mulberry32 з фіксованим seed, тому після перезавантаження цифри ті самі.
+
+Діапазони навмисно нерівні:
+
+- базова CR кампанії лежить в 1–8%, денний шум залишається в цих межах до округлення;
+- виплата множиться на коефіцієнт GEO, тож US платить помітно більше за IN;
+- у суботу й неділю кліків близько 62% від буднього обсягу;
+- частина кампаній збиткова, частина прибуткова, інакше таблиця ROI була б однотонною.
+
+`src/api/client.ts` віддає ці дані як REST-клієнт: `getStats(filters)`, `getOffers()`, `getGeos()`, `getSources()`. Кожен метод повертає `Promise` і чекає коротку штучну затримку. Невалідний діапазон дат відхиляється з помилкою, і екран показує стан error з Retry. Поки перший запит іде, видно skeleton.
+
+Живі postback-и не ходять у мережу. `recordConversion` додає подію в оперативний шар поверх згенерованої історії, а `useStats` підписаний на цей шар. Тому картки й таблиця оновлюються без повторного loading.
+
+## Click → lead → postback
+
+Так само, як у Keitaro-подібному трекері:
+
+1. Людина клікає оголошення. Трекер створює клік, кладе в нього `clickid` і редіректить на лендінг або оффер. Клік уже привʼязаний до кампанії, оффера, GEO і джерела.
+2. Відбувається дія: реєстрація, заявка, депозит. Рекламодавець або лендінг викликає postback URL трекера і підставляє макроси: `{clickid}`, `{payout}`, `{status}`.
+3. Трекер знаходить вихідний клік за `clickid`. Статус `lead` фіксує ліда без виплати, `approved` додає payout у revenue, `rejected` лишає ліда без грошей.
+4. Звіт перераховує CR, EPC, profit і ROI. У цьому демо крок 3 робить `usePostbackFeed`: замість HTTP-запиту інтервал створює подію й кладе її в той самий агрегат, що й історичні рядки.
+
+Транспорт ізольований у `createIntervalTransport`. Його можна замінити на WebSocket-клієнт, який викликає той самий callback із `LiveConversion`.
+
+## Архітектура
+
+```
+src/
+  api/                 асинхронний клієнт, який пізніше можна спрямувати на справжній бекенд
+  data/                каталог, seeded-генератор, агрегація, live-overlay, інтервал postback-ів
+  features/dashboard   фільтри, KPI, графіки, таблиця, жива стрічка
+  features/postback    тестер URL
+  components/ui        кнопки, поля, панелі
+  hooks                тема, каталог, статистика, usePostbackFeed
+  store                Zustand-фільтри і синхронізація з history API
+  utils                формули, дати, форматування
+```
+
+Фільтри живуть у Zustand. `bindFilterHistory` пише їх у query string і читає назад на `popstate`. Компоненти читають уже готовий `StatsResponse`: сирі денні рядки назовні не течуть.
+
+## Деплой на GitHub Pages
+
+Workflow `.github/workflows/deploy.yml` на пуш у `main` проганяє lint, тести й production-збірку, потім публікує `dist` через GitHub Pages.
+
+У налаштуваннях репозиторію: Settings → Pages → Build and deployment → Source: GitHub Actions.
+
+`public/404.html` повертає глибокі посилання на кшталт `/postback` назад у застосунок, бо GitHub Pages не має SPA-fallback.
+
+## Тести
+
+- `src/utils/metrics.test.ts` — CR, EPC, profit, ROI, нульові знаменники, дельта
+- `src/data/generator.test.ts` — стабільність seed, межі CR, вихідні проти буднів, змішаний ROI
+- `src/data/aggregate.test.ts` — згортка періоду і те, що approved postback додає дохід, а rejected ні
+- `src/features/dashboard/KpiCard.test.tsx` — рендер картки
+- `src/hooks/usePostbackFeed.test.tsx` — підміна транспорту і `setInterval`
+
+## Future improvements
+
+- Справжній WebSocket-бекенд замість `setInterval`, з тими самими типами події.
+- Авторизація і ролі: баєр бачить свої кампанії, тімлід бачить команду.
+- Серверна пагінація й сортування, коли рядків стане більше, ніж комфортно тримати в памʼяті браузера.
+- Збережені представлення фільтрів і експорт CSV.
